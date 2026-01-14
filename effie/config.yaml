@@ -1,0 +1,53 @@
+# where to send the logs to
+Target: http://localhost:7371/v1/effie/logs
+# print debug logs
+Debug: true
+# how often to scan for new files
+ScanFrequency: 10
+# where to scan for files, group is a string name to identify logs
+Input:
+    - group: web
+      pattern: ./logs/*.log
+# collect how many logs before sending them to setsuna
+MaxBatch: 100
+# send logs every x seconds if the MaxBatch array is not full yet
+MaxDelay: 10
+# where to save the progress file
+# it tells effie where it left of on tailing files
+ProgressFile: ./progress.json
+#This is the js function to parse the message field out of the log line
+JSMessageParser: |
+    function m(line) {
+        try {
+            json = JSON.parse(line);
+            if ("msg" in json) {
+                return json["msg"];
+            }else if ("message" in json) {
+                return json["message"];
+            }else if ("log" in json) {
+                return json["log"];
+            }else if ("a" in json) {
+                return json["a"];
+            }
+            return line;
+        }catch{
+            return line;
+        }
+    }
+#This changes the log line (src) itself before sending it
+JSTransformer: |
+    function t(line) {
+        try {
+            json = JSON.parse(line);
+            if ("password" in json) {
+                json["password"] = "***";
+            }
+            if ("a" in json) {
+                json["a"] = "z";
+            }
+            return JSON.stringify(json);
+        }catch{
+            return line;
+        }
+    }
+
