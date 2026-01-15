@@ -2,22 +2,26 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/v2"
 	"sync"
+
 	// "fmt"
 	"github.com/nxadm/tail"
 	"sigs.k8s.io/yaml"
+
 	// "io"
 	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
+
 	// "strings"
-	"github.com/dop251/goja"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/dop251/goja"
 	// "runtime/pprof"
 	// "github.com/httmako/jote"
 )
@@ -63,6 +67,7 @@ func num(value string) int {
 }
 
 var lastSendTime time.Time
+
 func Sending(logger *slog.Logger, logs []Log, target string) {
 	j, err := json.Marshal(logs)
 	if err != nil {
@@ -70,13 +75,13 @@ func Sending(logger *slog.Logger, logs []Log, target string) {
 		return
 	}
 	for {
-        logger.Debug("Time since last send","d",time.Since(lastSendTime))
-        lastSendTime = time.Now()
+		logger.Debug("Time since last send", "d", time.Since(lastSendTime))
+		lastSendTime = time.Now()
 		logger.Info("Posting", "lines", len(logs), "bytes", len(j))
 		res, err := http.Post(target, "application/json", bytes.NewReader(j))
 		if err != nil || res.StatusCode > 299 {
 			logger.Error("error during http post, retrying in 5s", "err", err)
-			time.Sleep(5 * time.Second)
+			return
 		} else {
 			return
 		}
@@ -262,39 +267,15 @@ func LoopInputAndTailFiles(cfg Config, logger *slog.Logger, logCh chan<- Log, us
 				SetTail(file, t)
 
 				transformer := CreateTransformer(cfg)
-
+				fileName := t.Filename
 				for line := range t.Lines {
 					//Create Log
-					l := Log{
+					logCh <- Log{
 						Ts:   line.Time.Format("2006-01-02 15:04:05.999"),
 						Host: host,
 						Msg:  line.Text,
-						Src:  line.Text,
+						Src:  transformer.TransformSource(fileName, input.Group, line.Text),
 					}
-					//Fix log line not being JSON
-					j := map[string]interface{}{}
-					err := json.Unmarshal([]byte(line.Text), &j)
-					if err != nil {
-						j = map[string]interface{}{
-							"msg": line.Text,
-						}
-					}
-					j["_meta"] = map[string]interface{}{
-						"file":   file,
-						"group":  input.Group,
-						"length": len(line.Text),
-					}
-
-					newSrc, err := json.Marshal(j)
-					if err != nil {
-						logger.Error("error: marshal meta-filled json failed", "err", err)
-						continue
-					}
-					l.Src = string(newSrc)
-					l.Msg = transformer.ParseMessage(l.Src)
-					l.Src = transformer.TransformSource(l.Src)
-
-					logCh <- l
 				}
 			}()
 		}
@@ -318,7 +299,6 @@ func SetTail(file string, tail *tail.Tail) {
 
 type Transformer struct {
 	VM                *goja.Runtime
-	MessageParser     goja.Callable
 	SourceTransformer goja.Callable
 }
 
@@ -336,27 +316,14 @@ func CreateTransformer(cfg Config) Transformer {
 	if !ok {
 		panic("t is not a function")
 	}
-	messageFunc, ok := goja.AssertFunction(vm.Get("m"))
-	if !ok {
-		panic("m is not a function")
-	}
 	return Transformer{
 		VM:                vm,
-		MessageParser:     messageFunc,
 		SourceTransformer: transformFunc,
 	}
 }
 
-func (t *Transformer) TransformSource(line string) string {
-	result, err := t.SourceTransformer(goja.Undefined(), t.VM.ToValue(line))
-	if err != nil {
-		panic(err)
-	}
-	return result.String()
-}
-
-func (t *Transformer) ParseMessage(line string) string {
-	result, err := t.MessageParser(goja.Undefined(), t.VM.ToValue(line))
+func (t *Transformer) TransformSource(file, group, line string) string {
+	result, err := t.SourceTransformer(goja.Undefined(), t.VM.ToValue(file), t.VM.ToValue(group), t.VM.ToValue(line))
 	if err != nil {
 		panic(err)
 	}

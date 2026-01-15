@@ -29,11 +29,11 @@ Selkie is the only exception as it should run as a cronjob.
 
 # Building
 
-Every component (selkie, kagero, effie) can be built using a default go build command like:
+Selkie and Kagero can be built using a default go build command like:
 
     CGO_ENABLED=0 goos=linux goarch=amd64 go build .
 
-For setsuna itself you have to enable jsonv2 (and should enable greentea gc) like this:
+For Effie and Setsuna you have to enable jsonv2 (and should enable greentea gc) like this:
 
     GOEXPERIMENT=greenteagc,jsonv2 CGO_ENABLED=0 goos=linux goarch=amd64 go build .
 
