@@ -38,6 +38,18 @@ For Effie and Setsuna you have to enable jsonv2 (and should enable greentea gc) 
     GOEXPERIMENT=greenteagc,jsonv2 CGO_ENABLED=0 goos=linux goarch=amd64 go build .
 
 
+# Local testing
+
+To run a postgres via podman you can use the following command:
+
+    podman run -it --rm -e POSTGRES_PASSWORD=pass -e POSTGRES_USER=dbuser -e POSTGRES_DB=db -p 5432:5432 docker.io/postgres
+
+To exec into it with psql you can use the following:
+
+    podman exec -it $(podman ps | grep "postgres" | awk '{print $1}') psql -W -U dbuser -d db
+
+
+
 # Components
 
 ## Setsuna

@@ -21,8 +21,9 @@ type Log struct {
 	ID   float64
 	Ts   string `json:"ts"`
 	Host string `json:"host"`
-	Msg  string `json:"msg"`
-	Src  string `json:"src"`
+	Message string `json:"message"`
+	PMessage sql.NullString
+	Doc  string `json:"doc"`
 }
 
 type Config struct {
@@ -133,7 +134,7 @@ func getNumFromRequest(w http.ResponseWriter, r *http.Request, key string) int {
 
 func getDoc(ctx context.Context, id int) Log {
 	var log Log
-	jote.Must(db.QueryRowContext(ctx, "SELECT id,ts,host,msg,src FROM docs WHERE id=$1", id).Scan(&log.ID, &log.Ts, &log.Host, &log.Msg, &log.Src))
+	jote.Must(db.QueryRowContext(ctx, "SELECT id,ts,doc FROM docs WHERE id=$1", id).Scan(&log.ID, &log.Ts, &log.Doc))
 	return log
 }
 
@@ -144,7 +145,10 @@ func getRows(ctx context.Context, q string, p int, m int) []Log {
 	defer rows.Close()
 	for rows.Next() {
 		log := Log{}
-		jote.Must(rows.Scan(&log.ID, &log.Ts, &log.Host, &log.Msg))
+		jote.Must(rows.Scan(&log.ID, &log.Ts, &log.Host, &log.PMessage))
+		if log.PMessage.Valid {
+			log.Message = log.PMessage.String
+		}
 		logs = append(logs, log)
 	}
 	jote.Must(rows.Err())
@@ -199,13 +203,13 @@ func getSearchSql(ctx context.Context, query string, page int, maxperpage int) (
 	maxperpage = max(min(maxperpage, 500), 10)
 	page = max(min(page, 5), 0)
 	if query == "" {
-		return db.QueryContext(ctx, "SELECT id, ts, host, msg FROM docs ORDER BY id DESC LIMIT $1 OFFSET $2", maxperpage, page*maxperpage)
+		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host', doc->'message' FROM docs ORDER BY id DESC LIMIT $1 OFFSET $2", maxperpage, page*maxperpage)
 	} else if strings.Contains(query, ": ") {
 		return buildQuerySql(ctx, query, page, maxperpage)
 	} else {
 		//LIKE in msg field because no field:value given
 		query = "%" + query + "%"
-		return db.QueryContext(ctx, "SELECT id, ts, host, msg FROM docs WHERE msg LIKE $1 ORDER BY id DESC LIMIT $2 OFFSET $3", query, maxperpage, page*maxperpage)
+		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host', doc->'message' FROM docs WHERE doc LIKE $1 ORDER BY id DESC LIMIT $2 OFFSET $3", query, maxperpage, page*maxperpage)
 	}
 }
 
@@ -216,7 +220,7 @@ func buildQuerySql(ctx context.Context, q string, p int, pd int) (*sql.Rows, err
 	expectAndOr := false
 	expectValue := false
 	args := strings.Split(q, " ")
-	sqlquery := []string{"SELECT id,ts,host,msg FROM docs WHERE"}
+	sqlquery := []string{"SELECT id,ts,doc->'_meta'->'host', doc->'message' FROM docs WHERE"}
 	sqlargs := []any{}
 	for _, a := range args {
 		la := strings.ToLower(a)
@@ -315,12 +319,10 @@ th{border-bottom: 2px solid black;}
 <h1>setsuna doc</h1>
 <p>ID: {{.doc.ID | printf "%.f"}}</p>
 <p>Time: {{.doc.Ts}}</p>
-<p>Host: {{.doc.Host}}</p>
-<p id="msgp">Msg: <span id="msg">{{.doc.Msg}}</span></p>
 JSON:<pre id="content"></pre>
 <br><br>
 Raw:
-<p id="src">{{.doc.Src}}</p>
+<p id="src">{{.doc.Doc}}</p>
 <br>
 </div>
 </body>
@@ -352,11 +354,6 @@ async function createJSON(){
     };
 }
 createJSON();
-let msg = document.getElementById("msg").innerText;
-let src = document.getElementById("src").innerText;
-if (msg == src.replaceAll(" ","")) {
-    document.getElementById("msgp").innerText = "Msg: <same as raw>";
-}
 </script>
 </html>
 {{end}}
@@ -456,7 +453,7 @@ th{border-bottom: 2px solid black;}
 <table id="tab">
 <tr><th>ID</th><th>Time</th><th>Host</th><th>Message</th></tr>
 {{range $k,$v := .list}}
-<tr><td><a href="view?id={{$v.ID | printf "%.f"}}">{{$v.ID | printf "%.f"}}</a></td><td>{{$v.Ts}}</td><td>{{$v.Host}}</td><td>{{$v.Msg}}</td></tr>
+<tr><td><a href="view?id={{$v.ID | printf "%.f"}}">{{$v.ID | printf "%.f"}}</a></td><td>{{$v.Ts}}</td><td>{{$v.Host}}</td><td>{{$v.Message}}</td></tr>
 {{end}}
 </table>
 </div>

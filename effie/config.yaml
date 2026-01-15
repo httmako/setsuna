@@ -17,12 +17,12 @@ MaxDelay: 10
 ProgressFile: ./progress.json
 #This changes the log line itself before sending it
 JSTransformer: |
-    function t(file, group, line) {
+    function t(host, file, group, line) {
         j = {}
         try {
             j = JSON.parse(line);
         }catch{
-            j = {"msg":line};
+            j = {"message":line};
         }
         if ("password" in j) {
             j["password"] = "***";
@@ -31,6 +31,7 @@ JSTransformer: |
             j["a"] = "z";
         }
         j["_meta"] = {
+            "host": host,
             "file": file,
             "group": group,
             "length": line.length,

@@ -45,9 +45,7 @@ type Input struct {
 
 type Log struct {
 	Ts   string `json:"ts"`
-	Host string `json:"host"`
-	Msg  string `json:"msg"`
-	Src  string `json:"src"`
+	Doc  string `json:"doc"`
 }
 
 func getEnv(name string, def string) string {
@@ -272,9 +270,7 @@ func LoopInputAndTailFiles(cfg Config, logger *slog.Logger, logCh chan<- Log, us
 					//Create Log
 					logCh <- Log{
 						Ts:   line.Time.Format("2006-01-02 15:04:05.999"),
-						Host: host,
-						Msg:  line.Text,
-						Src:  transformer.TransformSource(fileName, input.Group, line.Text),
+						Doc:  transformer.TransformSource(host, fileName, input.Group, line.Text),
 					}
 				}
 			}()
@@ -322,8 +318,8 @@ func CreateTransformer(cfg Config) Transformer {
 	}
 }
 
-func (t *Transformer) TransformSource(file, group, line string) string {
-	result, err := t.SourceTransformer(goja.Undefined(), t.VM.ToValue(file), t.VM.ToValue(group), t.VM.ToValue(line))
+func (t *Transformer) TransformSource(host, file, group, line string) string {
+	result, err := t.SourceTransformer(goja.Undefined(), t.VM.ToValue(host), t.VM.ToValue(file), t.VM.ToValue(group), t.VM.ToValue(line))
 	if err != nil {
 		panic(err)
 	}

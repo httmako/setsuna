@@ -20,7 +20,7 @@ type Log struct {
 	Ts   string `json:"ts"`
 	Host string `json:"host"`
 	Msg  string `json:"msg"`
-	Src  any    `json:"src"`
+	Doc  any    `json:"doc"`
 }
 
 type Config struct {
@@ -46,9 +46,9 @@ func main() {
 	db.SetMaxOpenConns(config.SQLMaxConnections)
 	// go func(){ for { fmt.Println(db.Stats()) time.Sleep(3*time.Second) } }()
 
-	jote.Must2(db.Exec("CREATE TABLE IF NOT EXISTS docs(id BIGSERIAL, ts TIMESTAMP, host VARCHAR(255), msg TEXT, src jsonb)"))
+	jote.Must2(db.Exec("CREATE TABLE IF NOT EXISTS docs(id BIGSERIAL, ts TIMESTAMP, doc jsonb)"))
 	jote.Must2(db.Exec("CREATE INDEX IF NOT EXISTS id ON docs (id)"))
-	jote.Must2(db.Exec("CREATE INDEX IF NOT EXISTS j ON docs USING GIN (src)"))
+	jote.Must2(db.Exec("CREATE INDEX IF NOT EXISTS j ON docs USING GIN (doc)"))
 
 	mux := http.NewServeMux()
 	RequestCounter := atomic.Uint64{}
@@ -77,19 +77,14 @@ func saveEffieLogs(r *http.Request, input []byte) {
 			tx.Rollback()
 		}
 	}()
-	stmt, err := tx.Prepare(pq.CopyIn("docs", "ts", "host", "msg", "src"))
+	stmt, err := tx.Prepare(pq.CopyIn("docs", "ts", "doc"))
 	jote.Must(err)
-    
-    srcIP := jote.HttpRequestGetIP(r)
-    strInput := string(input)
-    t := time.Now().Format("2006-01-02 15:04:05.999")
-    defaultMsg := "<NO/MSG>"
+
+	t := time.Now().Format("2006-01-02 15:04:05.999")
 	for _, j := range js {
 		jote.Must2(stmt.ExecContext(r.Context(),
 			getKeyOrDefault(j, "ts", t),
-			getKeyOrDefault(j, "host", srcIP),
-			getKeyOrDefault(j, "msg", defaultMsg),
-			getKeyOrDefault(j, "src", strInput),
+			getKeyOrDefault(j, "doc", "<NO/DOC>"),
 		))
 	}
 	jote.Must2(stmt.Exec())
