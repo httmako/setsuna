@@ -70,7 +70,7 @@ func Sending(logger *slog.Logger, logs []Log, target string) {
 		return
 	}
 	for {
-        logger.Debug("Time since last send","d",time.Since(lastSendTime)
+        logger.Debug("Time since last send","d",time.Since(lastSendTime))
         lastSendTime = time.Now()
 		logger.Info("Posting", "lines", len(logs), "bytes", len(j))
 		res, err := http.Post(target, "application/json", bytes.NewReader(j))
