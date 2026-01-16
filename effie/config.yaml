@@ -2,7 +2,7 @@
 Target: http://localhost:7371/v1/effie/logs
 # print debug logs
 Debug: true
-# how often to scan for new files
+# how often to scan for new files, in seconds
 ScanFrequency: 10
 # where to scan for files, group is a string name to identify logs
 Input:
@@ -15,7 +15,7 @@ MaxDelay: 10
 # where to save the progress file
 # it tells effie where it left of on tailing files
 ProgressFile: ./progress.json
-#This changes the log line itself before sending it
+#This changes the log line itself before sending it, must return a string
 JSTransformer: |
     function t(host, file, group, line) {
         j = {}

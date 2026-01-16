@@ -15,10 +15,6 @@ Current priorities are getting the performence up to speed, then security, code 
  - document/implement logging users for kagero ui (using oauth2-proxy)
  - implement "-c" flag for configuring config.yaml location on all components
  - optimize setsuna's json parsing (main performance overhead)
- - optimize effie so that 9k/s is not a roadblock
- - make selkie configurable to run as a daemon or cronjob (or add to setsuna)
- - decide on json or fmt logging for all components
- - decide if 2 js transformers are necessary
 
 
 # Install
@@ -84,12 +80,13 @@ It is outside setsuna so that it can be configured, deployed and run independent
 The Javascript module effie uses is the same as the one filebeat uses. 100 log lines parsed without the javascript module takes ~500μs and with it ~2000μs, the round trip and saving of the logs on setsuna takes ~300ms so the javascript execution time is negligable.
 
 The main bottleneck for setsuna is the json parsing.  
-If you configure effie to send batches of 10.000 lines, setsuna can save them in ~240ms. Effie can read 10k lines (with javascript parsing) in 1.3s.  
-If you configure effie to send in 100.000 line batches, setsuna takes ~1.8s to save them. Effie takes around 10s to read in the lines.  
+If you configure effie to send batches of 10.000 lines, setsuna can save them in ~240ms. Effie can read 10k lines (with javascript parsing) in ~600ms.  
+If you configure effie to send in 100.000 line batches, setsuna takes ~1.8s to save them. Effie takes around ~4.5s to read in the lines.  
 With 6 concurrent effie deployments constantly sending 10k batches all at once the setsuna server keeps an average ~500ms response time.  
+The time to read in data for Effie in this example is a "worst case" with reading only one file. If Effie is tailing multiple files concurrently, then it is a lot faster.  
 
-This means you can have around ~9000 logs per effie deployment per second (= 9k per kubernetes node if you have effie deployed as a daemonset).  
-Setsuna can handle ~60.000 logs per second (6 effie deployments sending at once has an average ~500ms response time).  
+This means you can have around 10.000 logs per effie deployment per second (= 10k per kubernetes node if you have effie deployed as a daemonset).  
+Setsuna can handle atleast ~60.000 logs per second (6 effie deployments sending at once has an average ~500ms response time).  
 
 If you create a simple go file that only sends 100.000 docs to postgres (same json and using CopyIn with pq library) it takes ~840ms to save it. This means (roughly) half of the time that setsuna spends per 100k batch request is being used to parse json.
 
