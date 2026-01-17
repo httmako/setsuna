@@ -18,12 +18,13 @@ import (
 )
 
 type Log struct {
-	ID   float64
-	Ts   string `json:"ts"`
-	Host string `json:"host"`
-	Message string `json:"message"`
-	PMessage sql.NullString
-	Doc  string `json:"doc"`
+	ID       float64
+	Ts       string `json:"ts"`
+	Host     string `json:"host"`
+	NHost    sql.NullString
+	Message  string `json:"message"`
+	NMessage sql.NullString
+	Doc      string `json:"doc"`
 }
 
 type Config struct {
@@ -145,9 +146,12 @@ func getRows(ctx context.Context, q string, p int, m int) []Log {
 	defer rows.Close()
 	for rows.Next() {
 		log := Log{}
-		jote.Must(rows.Scan(&log.ID, &log.Ts, &log.Host, &log.PMessage))
-		if log.PMessage.Valid {
-			log.Message = log.PMessage.String
+		jote.Must(rows.Scan(&log.ID, &log.Ts, &log.NHost, &log.NMessage))
+		if log.NMessage.Valid {
+			log.Message = log.NMessage.String
+		}
+		if log.NHost.Valid {
+			log.Host = log.NHost.String
 		}
 		logs = append(logs, log)
 	}
@@ -203,13 +207,13 @@ func getSearchSql(ctx context.Context, query string, page int, maxperpage int) (
 	maxperpage = max(min(maxperpage, 500), 10)
 	page = max(min(page, 5), 0)
 	if query == "" {
-		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host', doc->'message' FROM docs ORDER BY id DESC LIMIT $1 OFFSET $2", maxperpage, page*maxperpage)
+		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host' as host, doc->'message' as message FROM docs ORDER BY id DESC LIMIT $1 OFFSET $2", maxperpage, page*maxperpage)
 	} else if strings.Contains(query, ": ") {
 		return buildQuerySql(ctx, query, page, maxperpage)
 	} else {
 		//LIKE in msg field because no field:value given
 		query = "%" + query + "%"
-		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host', doc->'message' FROM docs WHERE doc LIKE $1 ORDER BY id DESC LIMIT $2 OFFSET $3", query, maxperpage, page*maxperpage)
+		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host' as host, doc->'message' as message FROM docs WHERE doc LIKE $1 ORDER BY id DESC LIMIT $2 OFFSET $3", query, maxperpage, page*maxperpage)
 	}
 }
 
