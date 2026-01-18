@@ -230,7 +230,8 @@ var alphaAndDotOnly = regexp.MustCompile(`^[_\.a-zA-Z0-9]+$`)
 
 func getSelectSqlFromFields(fields []string) string {
 	selectSql := "SELECT id, ts"
-	for _, field := range fields {
+	for _, _field := range fields {
+		field := strings.TrimSpace(_field)
 		if !alphaAndDotOnly.MatchString(field) {
 			panic("error: field of f has invalid value: " + field)
 		}
