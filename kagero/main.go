@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
+	//"encoding/json"
 	"fmt"
 	"github.com/httmako/jote"
 	_ "github.com/lib/pq"
@@ -161,7 +161,7 @@ func getRows(ctx context.Context, q string, p int, m int) []Log {
 	jote.Must(rows.Close())
 	return logs
 }
-
+/*
 var timeList = []string{"seconds", "minutes", "hours", "days"}
 
 func GetDateTrunc(timespan string) string {
@@ -202,6 +202,7 @@ func getRowCountForGraphic(ctx context.Context, timespan string) (string, string
 	jote.Must(err)
 	return string(tss), string(cs)
 }
+*/
 
 func doSearchSql(ctx context.Context, query string, page int, maxperpage int) (*sql.Rows, error) {
 	maxperpage = max(min(maxperpage, 500), 10)
