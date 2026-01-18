@@ -1,0 +1,64 @@
+{{ define "view" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>setsuna doc</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:consolas,arial;}
+#mainsimple{
+text-align:left;
+width:100%;
+max-width:900px;
+}
+table{border-collapse:collapse;}
+tr{border-bottom: 1px solid #000;}
+tr:last-child{border-bottom: none;}
+td, th, table{border: 1px solid black;}
+th{border-bottom: 2px solid black;}
+</style>
+</head>
+<body>
+<div id="main">
+<h1>setsuna doc</h1>
+<p>ID: {{.doc.ID | printf "%.f"}}</p>
+<p>Time: {{.doc.Ts}}</p>
+JSON:<pre id="content"></pre>
+<br><br>
+Raw:
+<p id="src">{{.doc.Doc}}</p>
+<br>
+</div>
+</body>
+<script>
+const clsMap = [
+[/^".*:$/, "red"],
+[/^"/, "green"],
+[/true|false/, "blue"],
+[/null/, "magenta"],
+[/.*/, "darkorange"],
+]
+
+function prettifyJson(text){
+console.log("Parsing:",text)
+let obj = JSON.parse(text);
+return JSON.stringify(obj, null, 4)
+.replace(/&/g, '&amp;')
+.replace(/</g, '&lt;')
+.replace(/>/g, '&gt;')
+.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => '<span style="color:'+clsMap.find(([regex]) => regex.test(match))[1]+'">'+match+'</span>');
+}
+
+async function createJSON(){
+    let text = document.getElementById("src").innerText;
+    try{
+        document.getElementById("content").innerHTML = prettifyJson(text);
+    }catch(e){
+        document.getElementById("content").innerHTML = e;
+    };
+}
+createJSON();
+</script>
+</html>
+{{end}}

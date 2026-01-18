@@ -1,0 +1,198 @@
+{{ define "search" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>setsuna logs</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:consolas,arial;}
+#tab{
+text-align:left;
+width:100%;
+max-width:900px;
+}
+.fl{float:left;padding-right:10px;}
+table{border-collapse:collapse;}
+tr{border-bottom: 1px solid #000;}
+tr:last-child{border-bottom: none;}
+td, th, table{border: 1px solid black;}
+th{border-bottom: 2px solid black;}
+
+ /* Dropdown Button */
+.dropbtn {
+  cursor: pointer;
+}
+
+/* The container <div> - needed to position the dropdown content */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+/* Dropdown Content (Hidden by Default) */
+.dropc {
+  display: none;
+  position: absolute;
+  background-color: #f1f1f1;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+}
+
+/* Links inside the dropdown */
+.dropc a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+}
+
+/* Change color of dropdown links on hover */
+.dropc a:hover {background-color: #ddd;}
+.show {display:block;}
+</style>
+</head>
+<body>
+<div id="main">
+<h1>setsuna logs</h1>
+<form action="/search" method="GET" id="f">
+<div class="fl" style="width:98%">Search<br><input type="text" id="q" name="q" placeholder="_meta.host=localhost || a.b.c=d" style="width:100%;"></div>
+<!--<div class="fl">From<br><input type="datetime-local" id="df" name="df" step="1"></div>-->
+<!--<div class="fl">To<br><input type="datetime-local" id="dt" name="dt" step="1"></div>-->
+<div class="fl">Past time period<br>
+    <div class="dropdown">
+      <input type="text" class="dropbtn" id="t" name="t" value="30 minutes">
+      <div id="myDropdown" class="dropc">
+        <a onclick="ChangeTimeSpan('30 minutes')">Last 30min</a>
+        <a onclick="ChangeTimeSpan('3 hours')">Last 3h</a>
+        <a onclick="ChangeTimeSpan('1 day')">Last 24h</a>
+        <a onclick="ChangeTimeSpan('7 days')">Last 7d</a>
+        <a onclick="ChangeTimeSpan('30 days')">Last 30d</a>
+      </div>
+    </div>
+</div>
+<div class="fl">Max results<br>
+    <div class="dropdown">
+      <input type="text" class="dropbtn" id="m" name="m" value="20">
+      <div id="myDropdown" class="dropc">
+        <a onclick="ChangeMaxResults('20')">20</a>
+        <a onclick="ChangeMaxResults('100')">100</a>
+        <a onclick="ChangeMaxResults('500')">500</a>
+      </div>
+    </div>
+</div>
+
+<div class="fl"><br><button type="submit">search</button></div>
+</form>
+<br>
+<canvas id="myChart" style="width:90%;height:320px"></canvas>
+<br>
+<table id="tab">
+<tr><th>ID</th><th>Time</th><th>Host</th><th>Message</th></tr>
+{{range $k,$v := .list}}
+<tr><td><a href="view?id={{$v.ID | printf "%.f"}}">{{$v.ID | printf "%.f"}}</a></td><td>{{$v.Ts}}</td><td>{{$v.Host}}</td><td>{{$v.Message}}</td></tr>
+{{end}}
+</table>
+</div>
+</body>
+<script>
+let lastDate = null;
+window.addEventListener("load2", function() {
+    var datetimeField = document.getElementById("d");
+    var now = new Date();
+    var utcString = now.toISOString().substring(0,19);
+    var year = now.getFullYear();
+    var month = now.getMonth() + 1;
+    var day = now.getDate();
+    var hour = now.getHours();
+    var minute = now.getMinutes();
+    var second = now.getSeconds();
+    var localDatetime = year + "-" +
+                      (month < 10 ? "0" + month.toString() : month) + "-" +
+                      (day < 10 ? "0" + day.toString() : day) + "T" +
+                      (hour < 10 ? "0" + hour.toString() : hour) + ":" +
+                      (minute < 10 ? "0" + minute.toString() : minute) +
+                      utcString.substring(16,19);
+    datetimeField.value = localDatetime;
+    lastDate = localDatetime;
+});
+
+//If date of the datetime picker was the same as the one when rendered the page => dont send it as timerange
+document.getElementById("f").addEventListener("submit", function(event) {
+    if (document.getElementById("d").value == lastDate) {
+        document.getElementById("d").disabled = true;
+    }
+});
+
+
+const urlParams = new URLSearchParams(window.location.search);
+window.addEventListener("load", function() {
+    SetUrlParamToElement("q");
+    SetUrlParamToElement("t");
+    SetUrlParamToElement("m");
+    SetUrlParamToElement("d");
+});
+function SetUrlParamToElement(id) {
+    if (urlParams.get(id)) {
+        document.getElementById(id).value = urlParams.get(id);
+    }
+}
+
+
+let dropdowns = document.getElementsByClassName("dropbtn");
+for (var i = 0; i < dropdowns.length; i++) {
+    dropdowns[i].addEventListener("click", function(e) {
+        e.target.parentElement.children[1].classList.toggle("show");
+    });
+}
+
+function ChangeTimeSpan(value) { document.getElementById("t").value = value; }
+function ChangeMaxResults(value) { document.getElementById("m").value = value; }
+
+// Close the dropdown menu if the user clicks outside of it
+window.onclick = function(event) {
+    if (event.target.matches('.dropbtn')) { return }
+    var dropdowns = document.getElementsByClassName("dropc");
+    for (var i = 0; i < dropdowns.length; i++) {
+        dropdowns[i].classList.remove('show');
+    }
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0"></script>
+<script>
+const xValues = JSON.parse({{.bar_ts}});
+const yValues = JSON.parse({{.bar_c}});
+
+const ctx = document.getElementById('myChart');
+
+const sum = yValues.reduce((a, b) => a + b, 0);
+const avg = (sum / yValues.length) || 0;
+
+new Chart(ctx, {
+  type: "bar",
+  data: {
+    labels: xValues,
+    datasets: [{
+      data: yValues
+    }]
+  },
+  options: {
+    scales: {
+      y: {
+        max: avg*1.5,
+      }
+    },
+    plugins: {
+      legend: {display: false},
+      title: {
+        display: true,
+        text: "documents",
+        font: {size: 16}
+      }
+    }
+  }
+});
+</script>
+</html>
+{{end}}

@@ -32,9 +32,9 @@ go.work.sum
 # .vscode/
 
 # setsuna
-setsuna
-kagero
-effie
-selkie
-logs
+setsuna/setsuna
+kagero/kagero
+effie/effie
+selkie/selkie
+effie/logs
 progress.json
