@@ -36,7 +36,6 @@ type Config struct {
 }
 
 /* TODO:
- *  search bar bigger, more spaced
  *  implement time based filtering for specific dates, e.g. ?st=20020101195959&et=2025xxxxx (or 2025.01.01 19:59:59)
  */
 
@@ -80,11 +79,11 @@ func main() {
 			http.Error(w, "ERROR: invalid timespan", 400)
 			return
 		}
-		timestamps, counts := getRowCountForGraphic(r.Context(), timespan)
+		//timestamps, counts := getRowCountForGraphic(r.Context(), timespan)
 		jote.ExecuteTemplate(tmpl, w, "search", jote.H{
 			"list":   getRows(r.Context(), query, page, perpage),
-			"bar_ts": timestamps,
-			"bar_c":  counts,
+			//"bar_ts": timestamps,
+			//"bar_c":  counts,
 		})
 	})
 

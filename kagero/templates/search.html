@@ -86,8 +86,6 @@ th{border-bottom: 2px solid black;}
 <div class="fl"><br><button type="submit">search</button></div>
 </form>
 <br>
-<canvas id="myChart" style="width:90%;height:320px"></canvas>
-<br>
 <table id="tab">
 <tr><th>ID</th><th>Time</th><th>Host</th><th>Message</th></tr>
 {{range $k,$v := .list}}
@@ -118,13 +116,13 @@ window.addEventListener("load2", function() {
     lastDate = localDatetime;
 });
 
+
 //If date of the datetime picker was the same as the one when rendered the page => dont send it as timerange
 document.getElementById("f").addEventListener("submit", function(event) {
     if (document.getElementById("d").value == lastDate) {
         document.getElementById("d").disabled = true;
     }
 });
-
 
 const urlParams = new URLSearchParams(window.location.search);
 window.addEventListener("load", function() {
@@ -158,41 +156,6 @@ window.onclick = function(event) {
         dropdowns[i].classList.remove('show');
     }
 }
-</script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0"></script>
-<script>
-const xValues = JSON.parse({{.bar_ts}});
-const yValues = JSON.parse({{.bar_c}});
-
-const ctx = document.getElementById('myChart');
-
-const sum = yValues.reduce((a, b) => a + b, 0);
-const avg = (sum / yValues.length) || 0;
-
-new Chart(ctx, {
-  type: "bar",
-  data: {
-    labels: xValues,
-    datasets: [{
-      data: yValues
-    }]
-  },
-  options: {
-    scales: {
-      y: {
-        max: avg*1.5,
-      }
-    },
-    plugins: {
-      legend: {display: false},
-      title: {
-        display: true,
-        text: "documents",
-        font: {size: 16}
-      }
-    }
-  }
-});
 </script>
 </html>
 {{end}}
