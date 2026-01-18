@@ -7,12 +7,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{font-family:consolas,arial;}
-#tab{
-text-align:left;
-width:100%;
-max-width:900px;
-}
-.fl{float:left;padding-right:10px;}
+#tab{text-align:left;margin-top:10px;table-layout:auto;}
+td,th{padding:7px;}
+.fl{display:inline-block;padding-right:10px;}
 table{border-collapse:collapse;}
 tr{border-bottom: 1px solid #000;}
 tr:last-child{border-bottom: none;}
@@ -82,19 +79,21 @@ th{border-bottom: 2px solid black;}
       </div>
     </div>
 </div>
-
 <div class="fl"><br><button type="submit">search</button></div>
 </form>
 <br>
+
 <table id="tab">
 <tr><th>ID</th><th>Time</th><th>Host</th><th>Message</th></tr>
 {{range $k,$v := .list}}
 <tr><td><a href="view?id={{$v.ID | printf "%.f"}}">{{$v.ID | printf "%.f"}}</a></td><td>{{$v.Ts}}</td><td>{{$v.Host}}</td><td>{{$v.Message}}</td></tr>
 {{end}}
 </table>
+
 </div>
 </body>
 <script>
+/*
 let lastDate = null;
 window.addEventListener("load2", function() {
     var datetimeField = document.getElementById("d");
@@ -123,6 +122,7 @@ document.getElementById("f").addEventListener("submit", function(event) {
         document.getElementById("d").disabled = true;
     }
 });
+*/
 
 const urlParams = new URLSearchParams(window.location.search);
 window.addEventListener("load", function() {
