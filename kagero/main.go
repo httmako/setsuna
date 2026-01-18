@@ -15,6 +15,7 @@ import (
 	// "time"
 	"context"
 	// "os"
+	"github.com/ganigeorgiev/fexpr"
 )
 
 type Log struct {
@@ -141,7 +142,7 @@ func getDoc(ctx context.Context, id int) Log {
 
 func getRows(ctx context.Context, q string, p int, m int) []Log {
 	var logs []Log
-	rows, err := getSearchSql(ctx, q, p, m)
+	rows, err := doSearchSql(ctx, q, p, m)
 	jote.Must(err)
 	defer rows.Close()
 	for rows.Next() {
@@ -201,99 +202,61 @@ func getRowCountForGraphic(ctx context.Context, timespan string) (string, string
 	return string(tss), string(cs)
 }
 
-// SELECT * FROM docs WHERE ts > '2026-01-08T19:03:03'
-// SELECT date_trunc('hour', ts) AS time_bucket, COUNT(*) AS row_count FROM docs GROUP BY time_bucket ORDER BY time_bucket
-func getSearchSql(ctx context.Context, query string, page int, maxperpage int) (*sql.Rows, error) {
+func doSearchSql(ctx context.Context, query string, page int, maxperpage int) (*sql.Rows, error) {
 	maxperpage = max(min(maxperpage, 500), 10)
-	page = max(min(page, 5), 0)
+	// page = max(min(page, 5), 0)
 	if query == "" {
-		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host' as host, doc->'message' as message FROM docs ORDER BY id DESC LIMIT $1 OFFSET $2", maxperpage, page*maxperpage)
-	} else if strings.Contains(query, ": ") {
-		return buildQuerySql(ctx, query, page, maxperpage)
-	} else {
-		//LIKE in msg field because no field:value given
-		query = "%" + query + "%"
-		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host' as host, doc->'message' as message FROM docs WHERE doc LIKE $1 ORDER BY id DESC LIMIT $2 OFFSET $3", query, maxperpage, page*maxperpage)
+		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host' as host, doc->'message' as message FROM docs ORDER BY id DESC LIMIT $1", maxperpage)
 	}
+	whereClause, args := createSqlWhereClause(query)
+	return db.QueryContext(ctx, "SELECT id,ts,doc->'_meta'->'host', doc->'message' FROM docs WHERE "+whereClause+" ORDER BY id DESC LIMIT "+strconv.Itoa(maxperpage), args...)
 }
 
-func buildQuerySql(ctx context.Context, q string, p int, pd int) (*sql.Rows, error) {
-	// (a: "b c" and b: c) or a)
-	argC := 1
-	bracketOpen := 0
-	expectAndOr := false
-	expectValue := false
-	args := strings.Split(q, " ")
-	sqlquery := []string{"SELECT id,ts,doc->'_meta'->'host', doc->'message' FROM docs WHERE"}
-	sqlargs := []any{}
-	for _, a := range args {
-		la := strings.ToLower(a)
-		if a == "(" {
-			bracketOpen++
-			sqlquery = append(sqlquery, a)
-			continue
-		}
-		if a == ")" {
-			bracketOpen--
-			sqlquery = append(sqlquery, a)
-			continue
-		}
-		if a[0] == '(' {
-			bracketOpen++
-			sqlquery = append(sqlquery, "(")
-			a = strings.TrimPrefix(a, "(")
-		}
-		if strings.HasSuffix(a, ":") {
-			if expectValue {
-				panic("expected value, got key (string ends with :)")
-			}
-			a = strings.TrimSuffix(a, ":")
-			a = strings.ReplaceAll(a, ".", ",")
-			a = "{" + a + "}"
-			sqlquery = append(sqlquery, "src#>>$"+strconv.Itoa(argC))
-			argC++
-			sqlargs = append(sqlargs, a)
-			expectValue = true
-			expectAndOr = false
-			continue
-		}
-		if la == "and" || la == "or" {
-			if expectValue || !expectAndOr {
-				panic("expected value, got AND/OR")
-			}
-			sqlquery = append(sqlquery, a)
-			expectAndOr = false
-			continue
-		}
-		if expectValue {
-			compare := "="
-			if strings.Contains(a, "%") {
-				compare = "LIKE"
-			}
-			sqlquery = append(sqlquery, compare+" $"+strconv.Itoa(argC))
-			argC++
-			sqlargs = append(sqlargs, a)
-			expectValue = false
-			expectAndOr = true
-			continue
-		}
-		//simple word, LIKE search
-		a = "%" + a + "%"
-		sqlquery = append(sqlquery, "msg LIKE $"+strconv.Itoa(argC))
-		argC++
-		sqlargs = append(sqlargs, a)
-		expectAndOr = true
+// SELECT * FROM docs WHERE ts > '2026-01-08T19:03:03'
+// SELECT date_trunc('hour', ts) AS time_bucket, COUNT(*) AS row_count FROM docs GROUP BY time_bucket ORDER BY time_bucket
 
+func createSqlWhereClause(input string) (string, []any) {
+	exprGroup, err := fexpr.Parse(input)
+	if err != nil {
+		panic(err)
 	}
-	if bracketOpen != 0 {
-		panic("invalid bracket count")
+	where, args, _ := createSqlWhereClauseLoop(exprGroup, "", []any{}, 1)
+	return where, args
+}
+
+func createSqlWhereClauseLoop(eg []fexpr.ExprGroup, where string, args []any, argc int) (string, []any, int) {
+	for i, e := range eg {
+		item := e.Item
+		switch i := item.(type) {
+		case fexpr.Expr:
+			where = where + " doc#>>$" + strconv.Itoa(argc) + string(i.Op) + "$" + strconv.Itoa(argc+1)
+			args = append(args, parserKeyToPG(i.Left.Literal))
+			args = append(args, i.Right.Literal)
+			argc += 2
+		case []fexpr.ExprGroup:
+			where = where + " ("
+			where, args, argc = createSqlWhereClauseLoop(i, where, args, argc)
+			where = where + " )"
+		}
+		if len(eg) > 1 && i < len(eg)-1 {
+			where = where + " " + parserJoinToPG(e.Join)
+		}
 	}
-	if expectValue {
-		panic("expect value true, missing value for key?")
+	return where, args, argc
+}
+
+func parserKeyToPG(key string) string {
+	return "{" + strings.ReplaceAll(key, ".", ",") + "}"
+}
+
+func parserJoinToPG(joinOp fexpr.JoinOp) string {
+	if joinOp == "&&" {
+		return "AND"
+	} else if joinOp == "||" {
+		return "OR"
+	} else {
+		panic(fmt.Sprintf("error: invalid joinop: %s", joinOp))
 	}
-	sqlquery = append(sqlquery, fmt.Sprintf("ORDER BY id DESC LIMIT %d OFFSET %d", pd, p*pd))
-	fmt.Println("Query:", strings.Join(sqlquery, " "), sqlargs)
-	return db.QueryContext(ctx, strings.Join(sqlquery, " "), sqlargs...)
 }
 
 var htmlView = `
@@ -423,7 +386,7 @@ th{border-bottom: 2px solid black;}
 <div id="main">
 <h1>setsuna logs</h1>
 <form action="/search" method="GET" id="f">
-<div class="fl">Search<br><input type="text" id="q" name="q" placeholder="g.h: i"></div>
+<div class="fl" style="width:98%">Search<br><input type="text" id="q" name="q" placeholder="_meta.host=localhost || a.b.c=d" style="width:100%;"></div>
 <!--<div class="fl">From<br><input type="datetime-local" id="df" name="df" step="1"></div>-->
 <!--<div class="fl">To<br><input type="datetime-local" id="dt" name="dt" step="1"></div>-->
 <div class="fl">Past time period<br> 
