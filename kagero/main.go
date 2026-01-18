@@ -207,10 +207,10 @@ func doSearchSql(ctx context.Context, query string, page int, maxperpage int) (*
 	maxperpage = max(min(maxperpage, 500), 10)
 	// page = max(min(page, 5), 0)
 	if query == "" {
-		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->'host' as host, doc->'message' as message FROM docs ORDER BY id DESC LIMIT $1", maxperpage)
+		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->>'host' as host, doc->>'message' as message FROM docs ORDER BY id DESC LIMIT $1", maxperpage)
 	}
 	whereClause, args := createSqlWhereClause(query)
-	return db.QueryContext(ctx, "SELECT id,ts,doc->'_meta'->'host', doc->'message' FROM docs WHERE "+whereClause+" ORDER BY id DESC LIMIT "+strconv.Itoa(maxperpage), args...)
+	return db.QueryContext(ctx, "SELECT id,ts,doc->'_meta'->>'host', doc->>'message' FROM docs WHERE "+whereClause+" ORDER BY id DESC LIMIT "+strconv.Itoa(maxperpage), args...)
 }
 
 // SELECT * FROM docs WHERE ts > '2026-01-08T19:03:03'
