@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	//"encoding/json"
+	"context"
 	"fmt"
 	"github.com/httmako/jote"
 	_ "github.com/lib/pq"
@@ -12,21 +13,18 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	// "time"
-	"context"
+	"time"
 	// "os"
 	"embed"
 	"github.com/ganigeorgiev/fexpr"
+	"regexp"
 )
 
 type Log struct {
-	ID       float64
-	Ts       string `json:"ts"`
-	Host     string `json:"host"`
-	NHost    sql.NullString
-	Message  string `json:"message"`
-	NMessage sql.NullString
-	Doc      string `json:"doc"`
+	ID     int64
+	Ts     string
+	Doc    string
+	Fields []any
 }
 
 type Config struct {
@@ -41,6 +39,7 @@ type Config struct {
 
 var db *sql.DB
 var logger *slog.Logger
+
 //go:embed all:templates/*
 var templates embed.FS
 
@@ -79,9 +78,15 @@ func main() {
 			http.Error(w, "ERROR: invalid timespan", 400)
 			return
 		}
+		_fields := r.FormValue("f")
+		fields := []string{"_meta.host", "message"}
+		if _fields != "" {
+			fields = strings.Split(_fields, ",")
+		}
 		//timestamps, counts := getRowCountForGraphic(r.Context(), timespan)
 		jote.ExecuteTemplate(tmpl, w, "search", jote.H{
-			"list":   getRows(r.Context(), query, page, perpage),
+			"list":   getRows(r.Context(), query, fields, page, perpage),
+			"fields": fields,
 			//"bar_ts": timestamps,
 			//"bar_c":  counts,
 		})
@@ -141,26 +146,32 @@ func getDoc(ctx context.Context, id int) Log {
 	return log
 }
 
-func getRows(ctx context.Context, q string, p int, m int) []Log {
+func getRows(ctx context.Context, query string, fields []string, page int, maxperpage int) []Log {
 	var logs []Log
-	rows, err := doSearchSql(ctx, q, p, m)
+	rows, err := doSearchSql(ctx, query, fields, page, maxperpage)
 	jote.Must(err)
 	defer rows.Close()
+	columns, err := rows.Columns()
+	jote.Must(err)
 	for rows.Next() {
+		vals := make([]any, len(columns))
+		ptrs := make([]any, len(columns))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
 		log := Log{}
-		jote.Must(rows.Scan(&log.ID, &log.Ts, &log.NHost, &log.NMessage))
-		if log.NMessage.Valid {
-			log.Message = log.NMessage.String
-		}
-		if log.NHost.Valid {
-			log.Host = log.NHost.String
-		}
+		jote.Must(rows.Scan(ptrs...))
+		log.ID = vals[0].(int64)
+		log.Ts = vals[1].(time.Time).Format("2006-01-02 15:04:05.000")
+		log.Fields = make([]any, len(columns)-2)
+		copy(log.Fields, vals[2:])
 		logs = append(logs, log)
 	}
 	jote.Must(rows.Err())
 	jote.Must(rows.Close())
 	return logs
 }
+
 /*
 var timeList = []string{"seconds", "minutes", "hours", "days"}
 
@@ -204,14 +215,39 @@ func getRowCountForGraphic(ctx context.Context, timespan string) (string, string
 }
 */
 
-func doSearchSql(ctx context.Context, query string, page int, maxperpage int) (*sql.Rows, error) {
+func doSearchSql(ctx context.Context, query string, fields []string, page int, maxperpage int) (*sql.Rows, error) {
 	maxperpage = max(min(maxperpage, 500), 10)
 	// page = max(min(page, 5), 0)
+	selectSql := getSelectSqlFromFields(fields)
 	if query == "" {
-		return db.QueryContext(ctx, "SELECT id, ts, doc->'_meta'->>'host' as host, doc->>'message' as message FROM docs ORDER BY id DESC LIMIT $1", maxperpage)
+		return db.QueryContext(ctx, selectSql+" FROM docs ORDER BY id DESC LIMIT $1", maxperpage)
 	}
 	whereClause, args := createSqlWhereClause(query)
-	return db.QueryContext(ctx, "SELECT id,ts,doc->'_meta'->>'host', doc->>'message' FROM docs WHERE "+whereClause+" ORDER BY id DESC LIMIT "+strconv.Itoa(maxperpage), args...)
+	return db.QueryContext(ctx, selectSql+" FROM docs WHERE "+whereClause+" ORDER BY id DESC LIMIT "+strconv.Itoa(maxperpage), args...)
+}
+
+var alphaAndDotOnly = regexp.MustCompile(`^[_\.a-zA-Z0-9]+$`)
+
+func getSelectSqlFromFields(fields []string) string {
+	selectSql := "SELECT id, ts"
+	for _, field := range fields {
+		if !alphaAndDotOnly.MatchString(field) {
+			panic("error: field of f has invalid value: " + field)
+		}
+		qs := "doc"
+		fs := strings.Split(field, ".")
+		for i, key := range fs {
+			if i+1 == len(fs) {
+				qs += "->>'" + key + "'"
+				break
+			}
+			qs += "->'" + key + "'"
+		}
+		selectSql += ", " + qs
+	}
+	//return "SELECT id, ts, doc->'_meta'->>'host' as host, doc->>'message' as message"
+	logger.Debug("SelectSQL build from fields", "sql", selectSql)
+	return selectSql
 }
 
 // SELECT * FROM docs WHERE ts > '2026-01-08T19:03:03'
@@ -223,6 +259,7 @@ func createSqlWhereClause(input string) (string, []any) {
 		panic(err)
 	}
 	where, args, _ := createSqlWhereClauseLoop(exprGroup, "", []any{}, 1)
+	logger.Debug("WhereSQL build from input", "sql", where)
 	return where, args
 }
 
@@ -260,4 +297,3 @@ func parserJoinToPG(joinOp fexpr.JoinOp) string {
 		panic(fmt.Sprintf("error: invalid joinop: %s", joinOp))
 	}
 }
-

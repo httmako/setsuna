@@ -53,7 +53,7 @@ th{border-bottom: 2px solid black;}
 <body>
 <div id="main">
 <h1>setsuna logs</h1>
-<form action="/search" method="GET" id="f">
+<form action="/search" method="GET" id="form">
 <div class="fl" style="width:98%">Search<br><input type="text" id="q" name="q" placeholder="_meta.host=localhost || a.b.c=d" style="width:100%;"></div>
 <!--<div class="fl">From<br><input type="datetime-local" id="df" name="df" step="1"></div>-->
 <!--<div class="fl">To<br><input type="datetime-local" id="dt" name="dt" step="1"></div>-->
@@ -79,14 +79,19 @@ th{border-bottom: 2px solid black;}
       </div>
     </div>
 </div>
+<div class="fl">Fields<br><input type="text" id="f" name="f" placeholder="_meta.host,message" style="width:300px"></div>
 <div class="fl"><br><button type="submit">search</button></div>
 </form>
 <br>
 
 <table id="tab">
-<tr><th>ID</th><th>Time</th><th>Host</th><th>Message</th></tr>
+<tr><th>ID</th><th>Time</th>{{range $k,$v := .fields}}<th>{{$v}}</th>{{end}}</tr>
 {{range $k,$v := .list}}
-<tr><td><a href="view?id={{$v.ID | printf "%.f"}}">{{$v.ID | printf "%.f"}}</a></td><td>{{$v.Ts}}</td><td>{{$v.Host}}</td><td>{{$v.Message}}</td></tr>
+  <tr><td><a href="view?id={{$v.ID}}">{{$v.ID}}</a></td><td>{{$v.Ts}}</td>
+    {{range $v.Fields}}
+      <td>{{if .}}{{printf "%s" .}}{{else}} - {{end}}</td>
+    {{end}}
+  </tr>
 {{end}}
 </table>
 
@@ -117,7 +122,7 @@ window.addEventListener("load2", function() {
 
 
 //If date of the datetime picker was the same as the one when rendered the page => dont send it as timerange
-document.getElementById("f").addEventListener("submit", function(event) {
+document.getElementById("form").addEventListener("submit", function(event) {
     if (document.getElementById("d").value == lastDate) {
         document.getElementById("d").disabled = true;
     }
@@ -130,6 +135,7 @@ window.addEventListener("load", function() {
     SetUrlParamToElement("t");
     SetUrlParamToElement("m");
     SetUrlParamToElement("d");
+    SetUrlParamToElement("f");
 });
 function SetUrlParamToElement(id) {
     if (urlParams.get(id)) {
