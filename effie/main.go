@@ -15,7 +15,7 @@ import (
 	"os"
 	"strconv"
 
-	// "strings"
+	"strings"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -39,6 +39,7 @@ type Config struct {
 }
 
 type Input struct {
+	Type string
 	Group   string
 	Pattern string
 }
@@ -231,10 +232,6 @@ func LoopInputAndTailFiles(cfg Config, logger *slog.Logger, logCh chan<- Log, us
 			}
 		}
 	}
-	host, err := os.Hostname()
-	if err != nil {
-		panic(err)
-	}
 
 	for _, input := range cfg.Input {
 		files, err := filepath.Glob(input.Pattern)
@@ -264,16 +261,60 @@ func LoopInputAndTailFiles(cfg Config, logger *slog.Logger, logCh chan<- Log, us
 				}
 				SetTail(file, t)
 
-				transformer := CreateTransformer(cfg)
-				fileName := t.Filename
-				for line := range t.Lines {
-					//Create Log
-					logCh <- Log{
-						Ts:   line.Time.Format("2006-01-02 15:04:05.999"),
-						Doc:  transformer.TransformSource(host, fileName, input.Group, line.Text),
-					}
+				if input.Type == "container" {
+					TailFileContainer(logger, t,cfg,input, logCh)
+				}else{
+					TailFileDefault(t,cfg,input, logCh)
 				}
+
 			}()
+		}
+	}
+}
+
+func TailFileContainer(logger *slog.Logger, t *tail.Tail, cfg Config, input Input, logCh chan<- Log) {
+	transformer := CreateTransformer(cfg)
+	host, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	partial := ""
+	for line := range t.Lines {
+		//parse cri-o
+		els := strings.SplitAfterN(line.Text," ",4)
+		if len(els) < 4 {
+			logger.Error("invalid cri-o log line","line",line.Text)
+			continue
+		}
+		logline := els[3]
+		if els[2] == "P " {
+			partial = els[3]
+			continue
+		}
+		if partial != "" {
+			temp := logline
+			logline = partial + temp
+			partial = ""
+		}
+		//Create Log
+		logCh <- Log{
+			Ts:   line.Time.Format("2006-01-02 15:04:05.999"),
+			Doc:  transformer.TransformSource(host, t.Filename, input.Group, logline),
+		}
+	}
+}
+
+func TailFileDefault(t *tail.Tail, cfg Config, input Input, logCh chan<- Log) {
+	transformer := CreateTransformer(cfg)
+	host, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	for line := range t.Lines {
+		//Create Log
+		logCh <- Log{
+			Ts:   line.Time.Format("2006-01-02 15:04:05.999"),
+			Doc:  transformer.TransformSource(host, t.Filename, input.Group, line.Text),
 		}
 	}
 }
