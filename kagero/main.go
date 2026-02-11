@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	// "os"
+	"os"
 	"embed"
 	"github.com/ganigeorgiev/fexpr"
 	"regexp"
@@ -47,9 +47,12 @@ func main() {
 	jote.ProfilingUntilTimeIfSet(30)
 	logger = jote.CreateLogger("stdout")
 
+	CONFIGLOCATION := os.Getenv("CONFIG")
+	if CONFIGLOCATION == "" {
+		CONFIGLOCATION = "./config.yaml"
+	}
 	config := Config{}
-
-	jote.ReadConfigYAML("config.yaml", &config)
+	jote.ReadConfigYAML(CONFIGLOCATION, &config)
 
 	var err error
 	db, err = sql.Open("postgres", config.SQLConnectionString)

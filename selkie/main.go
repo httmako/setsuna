@@ -30,8 +30,12 @@ func main() {
 	st := time.Now()
 	logger.Info("startup")
 
+	CONFIGLOCATION := os.Getenv("CONFIG")
+	if CONFIGLOCATION == "" {
+		CONFIGLOCATION = "./config.yaml"
+	}
 	config := Config{}
-	configfile, err := os.ReadFile("config.yaml")
+	configfile, err := os.ReadFile(CONFIGLOCATION)
 	if err != nil {
 		panic(err)
 	}
