@@ -1,3 +1,16 @@
 Port: 7371
 SQLConnectionString: postgres://dbuser:pass@127.0.0.1:5432/db?sslmode=disable
 SQLMaxConnections: 5
+# The cleanup will happen every X hours
+CleanupInterval: 24
+# This deletes any documents after the configured time, sql:
+# DELETE FROM docs WHERE timestamp > CURRENT_TIMESTAMP - '$CleanupMaxAgeAll'
+CleanupMaxAgeAll: "90 days"
+# "Cleanup" searches in docs for Key:Value matches and deletes them if older than KeepFor
+Cleanup:
+    - Key: _meta.group
+      Value: web
+      KeepFor: "30 days"
+    - Key: _meta.group
+      Value: k8s
+      KeepFor: "60 days"

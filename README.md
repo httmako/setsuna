@@ -2,9 +2,8 @@
 
 Work-In-Progress Minimalistic logging server using postgresql and golang
 
-The whole stack is the SEK stack, consisting of setsuna, (selkie,) effie and kagero.  
-They are similar to elasticsearch (log-server), filebeat (log-collector) and kibana (ui-dashboard). Selkie is the log-cleanup tool which deletes old logs after a configured time.  
-
+The whole stack is the SEK stack, consisting of setsuna, effie and kagero.  
+They are similar to elasticsearch (log-server), filebeat (log-collector) and kibana (ui-dashboard).
 
 # TODO
 
@@ -19,20 +18,16 @@ Current priorities are getting the performence up to speed, then security, code 
 
 # Install
 
-Simply download all 4 components, change their config.yaml and start them up.  
-Selkie is the only exception as it should run as a cronjob.
+Simply download all 3 components, change their config.yaml and start them up.  
 
 
 # Building
 
-Selkie and Kagero can be built using a default go build command like:
-
-    CGO_ENABLED=0 goos=linux goarch=amd64 go build .
-
-For Effie and Setsuna you have to enable jsonv2 (and should enable greentea gc) like this:
+You have to enable jsonv2 (and should enable greentea gc) like this:
 
     GOEXPERIMENT=greenteagc,jsonv2 CGO_ENABLED=0 goos=linux goarch=amd64 go build .
 
+You can build all 3 components with the above command.
 
 # Local testing
 
@@ -68,11 +63,6 @@ This means you can safely restart the application after it sent out logs, as no 
 ## Kagero
 
 This is the "kibana" (ui dashboard) to view and search through the stored logs.
-
-## Selkie
-
-This is the cleanup routine.  
-It is outside setsuna so that it can be configured, deployed and run independently.
 
 
 # Performance and technical

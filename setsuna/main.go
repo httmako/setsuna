@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json/v2"
+	"strings"
 	// "fmt"
 	"io"
 	"log/slog"
@@ -24,9 +25,18 @@ type Log struct {
 }
 
 type Config struct {
-	Port                int    `json:"port"`
-	SQLConnectionString string `json:"sqlconnectionstring"`
-	SQLMaxConnections   int    `json:"sqlmaxconnections"`
+	Port                int       `json:"port"`
+	SQLConnectionString string    `json:"sqlconnectionstring"`
+	SQLMaxConnections   int       `json:"sqlmaxconnections"`
+	CleanupInterval     int       `json:"cleanupinterval"`
+	CleanupMaxAgeAll    string    `json:"cleanupmaxageall"`
+	CleanupConfig       []Cleanup `json:"cleanupconfig"`
+}
+
+type Cleanup struct {
+	Key     string
+	Value   string
+	KeepFor string
 }
 
 var db *sql.DB
@@ -53,6 +63,8 @@ func main() {
 	jote.Must2(db.Exec("CREATE TABLE IF NOT EXISTS docs(id BIGSERIAL, ts TIMESTAMP, doc jsonb)"))
 	jote.Must2(db.Exec("CREATE INDEX IF NOT EXISTS id ON docs (id)"))
 	jote.Must2(db.Exec("CREATE INDEX IF NOT EXISTS j ON docs USING GIN (doc)"))
+
+	go DoCleanupForever(config)
 
 	mux := http.NewServeMux()
 	RequestCounter := atomic.Uint64{}
@@ -103,4 +115,40 @@ func getKeyOrDefault(j map[string]any, key string, def string) string {
 		}
 	}
 	return def
+}
+
+func DoCleanupForever(config Config) {
+	for {
+		logger.Info("sleeping until cleanup interval", "hours", config.CleanupInterval)
+		time.Sleep(time.Duration(config.CleanupInterval) * time.Hour)
+		logger.Info("starting cleanup")
+		for _, cleanConfig := range config.CleanupConfig {
+			if cleanConfig.Key == "" || cleanConfig.Value == "" || cleanConfig.KeepFor == "" {
+				logger.Warn("invalid cleanup config, empty key/value/keepfor", "key", cleanConfig.Key, "value", cleanConfig.Value, "keepfor", cleanConfig.KeepFor)
+				continue
+			}
+			logger.Info("cleaning with config", "key", cleanConfig.Key, "value", cleanConfig.Value, "keepfor", cleanConfig.KeepFor)
+			key := "{" + strings.ReplaceAll(cleanConfig.Key, ".", ",") + "}"
+			res, err := db.Exec("DELETE FROM docs WHERE doc#>>$1 = $2 AND ts < CURRENT_TIMESTAMP - INTERVAL '"+cleanConfig.KeepFor+"'", key, cleanConfig.Value)
+			if err != nil {
+				logger.Error("error during cleanup db.Exec", "err", err)
+				continue
+			}
+			count, err := res.RowsAffected()
+			logger.Info("cleaned", "key", cleanConfig.Key, "value", cleanConfig.Value, "keepfor", cleanConfig.KeepFor, "count", count, "err", err)
+		}
+		if config.CleanupMaxAgeAll != "" {
+			logger.Info("cleaning all logs", "CleanupMaxAgeAll", config.CleanupMaxAgeAll)
+			res, err := db.Exec("DELETE FROM docs WHERE ts < CURRENT_TIMESTAMP - INTERVAL '" + config.CleanupMaxAgeAll + "'")
+			if err != nil {
+				logger.Error("error during cleanup db.Exec", "err", err)
+			} else {
+				count, err := res.RowsAffected()
+				logger.Info("cleaned all logs", "count", count, "err", err)
+			}
+		} else {
+			logger.Info("config CleanupMaxAgeAll missing, skipping")
+		}
+		logger.Info("cleanup finished")
+	}
 }
