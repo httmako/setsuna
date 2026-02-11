@@ -6,6 +6,6 @@ RUN GOEXPERIMENT=jsonv2,greenteagc CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go buil
 
 FROM scratch
 COPY --from=builder /build/setsuna setsuna
-ENV CONFIG=/etc/config.yaml
+ENV CONFIG=/config/config.yaml
 ENTRYPOINT ["/setsuna"]
 
