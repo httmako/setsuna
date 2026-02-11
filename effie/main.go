@@ -288,7 +288,7 @@ func TailFileContainer(logger *slog.Logger, t *tail.Tail, cfg Config, input Inpu
 		}
 		logline := els[3]
 		if els[2] == "P " {
-			partial = els[3]
+			partial += els[3]
 			continue
 		}
 		if partial != "" {
