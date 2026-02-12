@@ -345,10 +345,6 @@ func CreateTransformer(cfg Config) Transformer {
 	if err != nil {
 		panic(err)
 	}
-	_, err = vm.RunString(cfg.JSMessageParser)
-	if err != nil {
-		panic(err)
-	}
 	transformFunc, ok := goja.AssertFunction(vm.Get("t"))
 	if !ok {
 		panic("t is not a function")
