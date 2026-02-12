@@ -7,12 +7,11 @@ ScanFrequency: 10
 # where to scan for files, group is a string name to identify logs
 # type can only be container or default (or empty for default)
 Input:
-    - type: container
-      group: web
+    - group: web
       pattern: ./logs/*.log
-    - type:
-      group: test
-      pattern: /abc/123*.log
+    - type: container
+      group: k8s
+      pattern: /var/log/containers/*.log
 # collect how many logs before sending them to setsuna
 MaxBatch: 10000
 # send logs every x seconds if the MaxBatch array is not full yet
@@ -20,25 +19,14 @@ MaxDelay: 10
 # where to save the progress file
 # it tells effie where it left of on tailing files
 ProgressFile: ./progress.json
-#This changes the log line itself before sending it, must return a string
+#This changes the log line itself before sending it, must return the log object again
 JSTransformer: |
-    function t(host, file, group, line) {
-        if (line.startsWith("{")) {
-            j = JSON.parse(line);
-        }else{
-            j = {"message":line};
+    function t(log) {
+        if ("password" in log) {
+            log["password"] = "***";
         }
-        if ("password" in j) {
-            j["password"] = "***";
+        if (log.message == "a") {
+            log.message = "z"
         }
-        if ("a" in j) {
-            j["a"] = "z";
-        }
-        j["_meta"] = {
-            "host": host,
-            "file": file,
-            "group": group,
-            "length": line.length,
-        };
-        return JSON.stringify(j);
+        return log;
     }

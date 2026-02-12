@@ -15,9 +15,9 @@ import (
 	"os"
 	"strconv"
 
-	"strings"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,14 +39,14 @@ type Config struct {
 }
 
 type Input struct {
-	Type string
+	Type    string
 	Group   string
 	Pattern string
 }
 
 type Log struct {
-	Ts   string `json:"ts"`
-	Doc  string `json:"doc"`
+	Ts  string `json:"ts"`
+	Doc string `json:"doc"`
 }
 
 func getEnv(name string, def string) string {
@@ -262,9 +262,9 @@ func LoopInputAndTailFiles(cfg Config, logger *slog.Logger, logCh chan<- Log, us
 				SetTail(file, t)
 
 				if input.Type == "container" {
-					TailFileContainer(logger, t,cfg,input, logCh)
-				}else{
-					TailFileDefault(t,cfg,input, logCh)
+					TailFileContainer(logger, t, cfg, input, logCh)
+				} else {
+					TailFileDefault(t, cfg, input, logCh)
 				}
 
 			}()
@@ -281,9 +281,9 @@ func TailFileContainer(logger *slog.Logger, t *tail.Tail, cfg Config, input Inpu
 	partial := ""
 	for line := range t.Lines {
 		//parse cri-o
-		els := strings.SplitAfterN(line.Text," ",4)
+		els := strings.SplitAfterN(line.Text, " ", 4)
 		if len(els) < 4 {
-			logger.Error("invalid cri-o log line","line",line.Text)
+			logger.Error("invalid cri-o log line", "line", line.Text)
 			continue
 		}
 		logline := els[3]
@@ -298,8 +298,8 @@ func TailFileContainer(logger *slog.Logger, t *tail.Tail, cfg Config, input Inpu
 		}
 		//Create Log
 		logCh <- Log{
-			Ts:   line.Time.Format("2006-01-02 15:04:05.999"),
-			Doc:  transformer.TransformSource(host, t.Filename, input.Group, logline),
+			Ts:  line.Time.Format("2006-01-02 15:04:05.999"),
+			Doc: transformer.TransformSource(host, t.Filename, input.Group, logline),
 		}
 	}
 }
@@ -313,8 +313,8 @@ func TailFileDefault(t *tail.Tail, cfg Config, input Input, logCh chan<- Log) {
 	for line := range t.Lines {
 		//Create Log
 		logCh <- Log{
-			Ts:   line.Time.Format("2006-01-02 15:04:05.999"),
-			Doc:  transformer.TransformSource(host, t.Filename, input.Group, line.Text),
+			Ts:  line.Time.Format("2006-01-02 15:04:05.999"),
+			Doc: transformer.TransformSource(host, t.Filename, input.Group, line.Text),
 		}
 	}
 }
@@ -341,24 +341,40 @@ type Transformer struct {
 
 func CreateTransformer(cfg Config) Transformer {
 	vm := goja.New()
-	_, err := vm.RunString(cfg.JSTransformer)
+	prog := goja.MustCompile("t", cfg.JSTransformer, false)
+	_, err := vm.RunProgram(prog)
 	if err != nil {
 		panic(err)
 	}
-	transformFunc, ok := goja.AssertFunction(vm.Get("t"))
+	fn, ok := goja.AssertFunction(vm.Get("t"))
 	if !ok {
-		panic("t is not a function")
+		panic("Could not find function t")
 	}
 	return Transformer{
 		VM:                vm,
-		SourceTransformer: transformFunc,
+		SourceTransformer: fn,
 	}
 }
 
 func (t *Transformer) TransformSource(host, file, group, line string) string {
-	result, err := t.SourceTransformer(goja.Undefined(), t.VM.ToValue(host), t.VM.ToValue(file), t.VM.ToValue(group), t.VM.ToValue(line))
+	j := map[string]any{}
+	if strings.HasPrefix(line, "{") {
+		if err := json.Unmarshal([]byte(line), &j); err != nil {
+			j["message"] = line
+		}
+	} else {
+		j["message"] = line
+	}
+	j["_meta"] = map[string]any{
+		"host":   host,
+		"file":   file,
+		"group":  group,
+		"length": len(line),
+	}
+	res, err := t.SourceTransformer(goja.Undefined(), t.VM.ToValue(j))
 	if err != nil {
 		panic(err)
 	}
-	return result.String()
+	jsonbytes, err := json.Marshal(res.Export())
+	return string(jsonbytes)
 }
