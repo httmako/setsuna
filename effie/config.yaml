@@ -23,10 +23,9 @@ ProgressFile: ./progress.json
 #This changes the log line itself before sending it, must return a string
 JSTransformer: |
     function t(host, file, group, line) {
-        j = {}
-        try {
+        if (line.startsWith("{")) {
             j = JSON.parse(line);
-        }catch{
+        }else{
             j = {"message":line};
         }
         if ("password" in j) {
