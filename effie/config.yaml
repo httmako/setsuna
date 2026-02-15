@@ -22,11 +22,14 @@ ProgressFile: ./progress.json
 #This changes the log line itself before sending it, must return the log object again
 JSTransformer: |
     function t(log) {
+        // K8s parse hostname of pod
+        if (log._meta.file.startsWith("/var/log/containers/")) {
+            let parts = log._meta.file.slice(20).split("_");
+            log._meta.host = parts[0];
+            log._meta.ns = parts[1];
+        }
         if ("password" in log) {
             log["password"] = "***";
-        }
-        if (log.message == "a") {
-            log.message = "z"
         }
         return log;
     }
