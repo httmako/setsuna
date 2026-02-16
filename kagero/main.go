@@ -31,6 +31,8 @@ type Config struct {
 	Port                int    `json:"Port"`
 	SQLConnectionString string `json:"sqlconnectionstring"`
 	SQLMaxConnections   int    `json:"sqlmaxconnections"`
+	EnableAnyQuery	    bool `json:"enableanyquery"`
+	EnableWildcardQuery bool `json:"enablewildcardquery"`
 }
 
 /* TODO:
@@ -45,7 +47,7 @@ var templates embed.FS
 
 func main() {
 	jote.ProfilingUntilTimeIfSet(30)
-	logger = jote.CreateLogger("stdout")
+	logger = jote.CreateLoggerWithDebug("stdout")
 
 	CONFIGLOCATION := os.Getenv("CONFIG")
 	if CONFIGLOCATION == "" {
@@ -88,7 +90,7 @@ func main() {
 		}
 		//timestamps, counts := getRowCountForGraphic(r.Context(), timespan)
 		jote.ExecuteTemplate(tmpl, w, "search", jote.H{
-			"list":   getRows(r.Context(), query, fields, page, perpage),
+			"list":   getRows(r.Context(), config, query, fields, page, perpage),
 			"fields": fields,
 			//"bar_ts": timestamps,
 			//"bar_c":  counts,
@@ -149,9 +151,9 @@ func getDoc(ctx context.Context, id int) Log {
 	return log
 }
 
-func getRows(ctx context.Context, query string, fields []string, page int, maxperpage int) []Log {
+func getRows(ctx context.Context, cfg Config, query string, fields []string, page int, maxperpage int) []Log {
 	var logs []Log
-	rows, err := doSearchSql(ctx, query, fields, page, maxperpage)
+	rows, err := doSearchSql(ctx, cfg, query, fields, page, maxperpage)
 	jote.Must(err)
 	defer rows.Close()
 	columns, err := rows.Columns()
@@ -218,14 +220,15 @@ func getRowCountForGraphic(ctx context.Context, timespan string) (string, string
 }
 */
 
-func doSearchSql(ctx context.Context, query string, fields []string, page int, maxperpage int) (*sql.Rows, error) {
+func doSearchSql(ctx context.Context, cfg Config, query string, fields []string, page int, maxperpage int) (*sql.Rows, error) {
 	maxperpage = max(min(maxperpage, 500), 10)
 	// page = max(min(page, 5), 0)
 	selectSql := getSelectSqlFromFields(fields)
 	if query == "" {
 		return db.QueryContext(ctx, selectSql+" FROM docs ORDER BY id DESC LIMIT $1", maxperpage)
 	}
-	whereClause, args := createSqlWhereClause(query)
+	whereClause, args := createSqlWhereClause(cfg, query)
+	logger.Debug("query","where",whereClause)
 	return db.QueryContext(ctx, selectSql+" FROM docs WHERE "+whereClause+" ORDER BY id DESC LIMIT "+strconv.Itoa(maxperpage), args...)
 }
 
@@ -257,28 +260,43 @@ func getSelectSqlFromFields(fields []string) string {
 // SELECT * FROM docs WHERE ts > '2026-01-08T19:03:03'
 // SELECT date_trunc('hour', ts) AS time_bucket, COUNT(*) AS row_count FROM docs GROUP BY time_bucket ORDER BY time_bucket
 
-func createSqlWhereClause(input string) (string, []any) {
+func createSqlWhereClause(cfg Config, input string) (string, []any) {
 	exprGroup, err := fexpr.Parse(input)
 	if err != nil {
 		panic(err)
 	}
-	where, args, _ := createSqlWhereClauseLoop(exprGroup, "", []any{}, 1)
+	where, args, _ := createSqlWhereClauseLoop(cfg, exprGroup, "", []any{}, 1)
 	logger.Debug("WhereSQL build from input", "sql", where)
 	return where, args
 }
 
-func createSqlWhereClauseLoop(eg []fexpr.ExprGroup, where string, args []any, argc int) (string, []any, int) {
+func createSqlWhereClauseLoop(cfg Config, eg []fexpr.ExprGroup, where string, args []any, argc int) (string, []any, int) {
 	for i, e := range eg {
 		item := e.Item
 		switch i := item.(type) {
 		case fexpr.Expr:
-			where = where + " doc#>>$" + strconv.Itoa(argc) + string(i.Op) + "$" + strconv.Itoa(argc+1)
-			args = append(args, parserKeyToPG(i.Left.Literal))
-			args = append(args, i.Right.Literal)
-			argc += 2
+			op := string(i.Op)
+			if op != "=" && op != "!=" {
+				panic("invalid operator, allowed:  = !=")
+			}
+			val := i.Right.Literal
+			if cfg.EnableWildcardQuery && strings.Contains(val,"*")  {
+				op = "LIKE"
+				val = strings.ReplaceAll(val,"*","%")
+			}
+			if i.Left.Literal == "@any" && cfg.EnableAnyQuery {
+				where = where + " doc::TEXT LIKE $" + strconv.Itoa(argc)
+				args = append(args, val)
+				argc += 1
+			}else {
+				where = where + " doc#>>$" + strconv.Itoa(argc) + " " + op + " $" + strconv.Itoa(argc+1)
+				args = append(args, parserKeyToPG(i.Left.Literal))
+				args = append(args, val)
+				argc += 2
+			}
 		case []fexpr.ExprGroup:
 			where = where + " ("
-			where, args, argc = createSqlWhereClauseLoop(i, where, args, argc)
+			where, args, argc = createSqlWhereClauseLoop(cfg, i, where, args, argc)
 			where = where + " )"
 		}
 		if len(eg) > 1 && i < len(eg)-1 {

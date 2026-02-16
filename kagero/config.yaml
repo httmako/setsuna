@@ -1,3 +1,10 @@
 Port: 7372
 SQLConnectionString: postgres://dbuser:pass@127.0.0.1:5432/db?sslmode=disable
 SQLMaxConnections: 5
+
+# ui config
+
+# Enable "@any:xxx" query function, which searches the whole json document for "xxx"
+EnableAnyQuery: true
+# Enable "message:*error*" query function
+EnableWildcardQuery: true
