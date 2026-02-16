@@ -4,20 +4,20 @@ import (
 	"database/sql"
 	//"encoding/json"
 	"context"
+	"embed"
 	"fmt"
+	"github.com/ganigeorgiev/fexpr"
 	"github.com/httmako/jote"
 	_ "github.com/lib/pq"
 	"html/template"
 	"log/slog"
 	"net/http"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
-	"os"
-	"embed"
-	"github.com/ganigeorgiev/fexpr"
-	"regexp"
 )
 
 type Log struct {
@@ -31,8 +31,8 @@ type Config struct {
 	Port                int    `json:"Port"`
 	SQLConnectionString string `json:"sqlconnectionstring"`
 	SQLMaxConnections   int    `json:"sqlmaxconnections"`
-	EnableAnyQuery	    bool `json:"enableanyquery"`
-	EnableWildcardQuery bool `json:"enablewildcardquery"`
+	EnableAnyQuery      bool   `json:"enableanyquery"`
+	EnableWildcardQuery bool   `json:"enablewildcardquery"`
 }
 
 /* TODO:
@@ -104,7 +104,7 @@ func main() {
 		}
 		doc, err := getDoc(r.Context(), id)
 		jote.ExecuteTemplate(tmpl, w, "view", jote.H{
-			"doc": doc,
+			"doc":   doc,
 			"error": err,
 		})
 	})
@@ -152,7 +152,7 @@ func getDoc(ctx context.Context, id int) (Log, string) {
 	err := db.QueryRowContext(ctx, "SELECT id,ts,doc FROM docs WHERE id=$1", id).Scan(&log.ID, &log.Ts, &log.Doc)
 	if err == sql.ErrNoRows {
 		return log, "Document not found"
-	}else if err != nil {
+	} else if err != nil {
 		return log, err.Error()
 	}
 	return log, ""
@@ -235,7 +235,7 @@ func doSearchSql(ctx context.Context, cfg Config, query string, fields []string,
 		return db.QueryContext(ctx, selectSql+" FROM docs ORDER BY id DESC LIMIT $1", maxperpage)
 	}
 	whereClause, args := createSqlWhereClause(cfg, query)
-	logger.Debug("query","where",whereClause)
+	logger.Debug("query", "where", whereClause)
 	return db.QueryContext(ctx, selectSql+" FROM docs WHERE "+whereClause+" ORDER BY id DESC LIMIT "+strconv.Itoa(maxperpage), args...)
 }
 
@@ -287,15 +287,15 @@ func createSqlWhereClauseLoop(cfg Config, eg []fexpr.ExprGroup, where string, ar
 				panic("invalid operator, allowed:  = !=")
 			}
 			val := i.Right.Literal
-			if cfg.EnableWildcardQuery && strings.Contains(val,"*")  {
+			if cfg.EnableWildcardQuery && strings.Contains(val, "*") {
 				op = "LIKE"
-				val = strings.ReplaceAll(val,"*","%")
+				val = strings.ReplaceAll(val, "*", "%")
 			}
 			if i.Left.Literal == "@any" && cfg.EnableAnyQuery {
 				where = where + " doc::TEXT LIKE $" + strconv.Itoa(argc)
 				args = append(args, val)
 				argc += 1
-			}else {
+			} else {
 				where = where + " doc#>>$" + strconv.Itoa(argc) + " " + op + " $" + strconv.Itoa(argc+1)
 				args = append(args, parserKeyToPG(i.Left.Literal))
 				args = append(args, val)
