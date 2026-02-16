@@ -45,6 +45,10 @@ var logger *slog.Logger
 //go:embed all:templates/*
 var templates embed.FS
 
+var errorMap = map[string]string{
+	"unexpected character '*'": "Did you put the value in quotes? Example: message=\"Exit*\"",
+}
+
 func main() {
 	jote.ProfilingUntilTimeIfSet(30)
 	logger = jote.CreateLoggerWithDebug("stdout")
@@ -88,6 +92,19 @@ func main() {
 		if _fields != "" {
 			fields = strings.Split(_fields, ",")
 		}
+
+		defer func() {
+			if r := recover(); r != nil {
+				if err, ok := r.(error); ok {
+					jote.ExecuteTemplate(tmpl, w, "search", jote.H{
+						"fields": fields,
+						"error":  fmt.Sprintf("%s . %s", r, errorMap[err.Error()]),
+					})
+				}
+
+			}
+		}()
+
 		//timestamps, counts := getRowCountForGraphic(r.Context(), timespan)
 		jote.ExecuteTemplate(tmpl, w, "search", jote.H{
 			"list":   getRows(r.Context(), config, query, fields, page, perpage),
@@ -273,7 +290,7 @@ func createSqlWhereClause(cfg Config, input string) (string, []any) {
 		panic(err)
 	}
 	where, args, _ := createSqlWhereClauseLoop(cfg, exprGroup, "", []any{}, 1)
-	logger.Debug("WhereSQL build from input", "sql", where)
+	logger.Debug("WhereSQL", "sql", where)
 	return where, args
 }
 
