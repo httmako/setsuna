@@ -102,8 +102,10 @@ func main() {
 		if id == -1 || id == 0 {
 			return
 		}
+		doc, err := getDoc(r.Context(), id)
 		jote.ExecuteTemplate(tmpl, w, "view", jote.H{
-			"doc": getDoc(r.Context(), id),
+			"doc": doc,
+			"error": err,
 		})
 	})
 
@@ -145,10 +147,15 @@ func getNumFromRequest(w http.ResponseWriter, r *http.Request, key string) int {
 	return ret
 }
 
-func getDoc(ctx context.Context, id int) Log {
+func getDoc(ctx context.Context, id int) (Log, string) {
 	var log Log
-	jote.Must(db.QueryRowContext(ctx, "SELECT id,ts,doc FROM docs WHERE id=$1", id).Scan(&log.ID, &log.Ts, &log.Doc))
-	return log
+	err := db.QueryRowContext(ctx, "SELECT id,ts,doc FROM docs WHERE id=$1", id).Scan(&log.ID, &log.Ts, &log.Doc)
+	if err == sql.ErrNoRows {
+		return log, "Document not found"
+	}else if err != nil {
+		return log, err.Error()
+	}
+	return log, ""
 }
 
 func getRows(ctx context.Context, cfg Config, query string, fields []string, page int, maxperpage int) []Log {

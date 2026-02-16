@@ -23,6 +23,9 @@ pre{white-space: pre-wrap;}
 <body>
 <div id="main">
 <h1>setsuna doc</h1>
+{{if .error}}
+<p style="color:red;">Error: {{.error}}</p>
+{{end}}
 <p>ID: {{.doc.ID}}</p>
 <p>Time: {{.doc.Ts}}</p>
 JSON:<pre id="content"></pre>
