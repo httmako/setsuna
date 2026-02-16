@@ -33,6 +33,7 @@ type Config struct {
 	SQLMaxConnections   int    `json:"sqlmaxconnections"`
 	EnableAnyQuery      bool   `json:"enableanyquery"`
 	EnableWildcardQuery bool   `json:"enablewildcardquery"`
+	DefaultColumns      string `json:"defaultcolumns"`
 }
 
 /* TODO:
@@ -72,7 +73,9 @@ func main() {
 
 	tmpl := template.Must(template.ParseFS(templates, "templates/*"))
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		jote.ExecuteTemplate(tmpl, w, "search", jote.H{})
+		jote.ExecuteTemplate(tmpl, w, "search", jote.H{
+			"defaultcolumns": config.DefaultColumns,
+		})
 	})
 
 	mux.HandleFunc("GET /search", func(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +91,7 @@ func main() {
 			return
 		}
 		_fields := r.FormValue("f")
-		fields := []string{"_meta.host", "message"}
+		fields := strings.Split(config.DefaultColumns, ",")
 		if _fields != "" {
 			fields = strings.Split(_fields, ",")
 		}
@@ -107,6 +110,7 @@ func main() {
 
 		//timestamps, counts := getRowCountForGraphic(r.Context(), timespan)
 		jote.ExecuteTemplate(tmpl, w, "search", jote.H{
+			"defaultcolumns": config.DefaultColumns,
 			"list":   getRows(r.Context(), config, query, fields, page, perpage),
 			"fields": fields,
 			//"bar_ts": timestamps,

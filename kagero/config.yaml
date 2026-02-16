@@ -8,3 +8,5 @@ SQLMaxConnections: 5
 EnableAnyQuery: true
 # Enable "message:*error*" query function
 EnableWildcardQuery: true
+# Which columns to show in the table by default, id and time will always be shown
+DefaultColumns: "_meta.host,message"
