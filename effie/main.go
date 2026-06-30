@@ -247,6 +247,10 @@ func LoopInputAndTailFiles(cfg Config, logger *slog.Logger, logCh chan<- Log, us
 			if _, ok := GetTailFromFilePath(file); ok {
 				continue
 			}
+			if _, err := os.Stat(file); err != nil {
+				logger.Error("Error tailing file", "err", err)
+				continue
+			}
 			logger.Debug("Tailing new file", "path", file)
 			go func() {
 				tconf := tail.Config{Follow: true, ReOpen: true}
