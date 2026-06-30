@@ -1,15 +1,15 @@
 module effie
 
-go 1.25.5
+go 1.26.4
 
 require (
-	github.com/dop251/goja v0.0.0-20260106131823-651366fbe6e3
+	github.com/dop251/goja v0.0.0-20260629171413-2a84ae0cf10d
 	github.com/nxadm/tail v1.4.11
 	sigs.k8s.io/yaml v1.6.0
 )
 
 require (
-	github.com/dlclark/regexp2 v1.11.4 // indirect
+	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect

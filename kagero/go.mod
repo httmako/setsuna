@@ -1,11 +1,11 @@
 module kagero
 
-go 1.25.5
+go 1.26.4
 
 require (
 	github.com/ganigeorgiev/fexpr v0.5.0
 	github.com/httmako/jote v0.1.5
-	github.com/lib/pq v1.10.9
+	github.com/lib/pq v1.12.3
 )
 
 require (
